@@ -362,10 +362,11 @@ export const DEFAULT_CONFIG = {
   },
   // 桌面端/控制台
   server: {
+    host: '127.0.0.1',         // --host 可覆盖；0.0.0.0 允许通过内网 IP 访问
     // 端口：QQ_AGENT_PORT 显式覆盖 > 默认 3210 + PROFILE 偏移
     // （第二实例整体 +100，避免和主实例撞端口）
     port: Number(process.env.QQ_AGENT_PORT) || (3210 + portOffset()),
-    token: '',                // 留空 = 只监听 127.0.0.1
+    token: '',                // 可选控制台 API 令牌，留空不校验令牌
     autoStart: false,         // 开机自启（仅 Electron 桌面端生效）
     closeToTray: true         // 点关闭 = 最小化到托盘
   },

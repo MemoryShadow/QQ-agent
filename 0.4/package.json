@@ -47,7 +47,7 @@
     "test:whitelist": "node test/onebot-whitelist-test.mjs",
     "test:sticker": "node test/sticker-collect-test.mjs",
     "test:msgid": "node test/message-id-test.mjs",
-    "test:coverage": "node test/coverage-offline.mjs && node test/coverage-http.mjs && node test/coverage-e2e.mjs && node test/coverage-ui.mjs && node test/coverage-wiring.mjs",
+    "test:coverage": "node test/coverage-offline.mjs && node test/coverage-http.mjs && node test/server-listen-test.mjs && node test/coverage-e2e.mjs && node test/coverage-ui.mjs && node test/coverage-wiring.mjs",
     "test:all": "npm test && npm run test:coverage",
     "test:prompt": "node test/test-prompt.mjs && node test/prompt-anchor-test.mjs",
     "test:render": "node test/render-test.mjs",

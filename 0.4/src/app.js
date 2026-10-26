@@ -79,8 +79,11 @@ function compareSemver(a, b) {
    防止监听器链式递归（见 createApp 内的递归护栏注释）。 */
 const appLogFns = new WeakSet();
 
-export function createApp({ log = console.log } = {}) {
+export function createApp({ log = console.log, host } = {}) {
   const cfg = getConfig();
+  // 监听地址在启动时确定；入口传入的 --host 优先于已保存配置。
+  const listenHost = String(host || cfg.server?.host || '127.0.0.1').trim();
+  const remoteAccess = !['127.0.0.1', '::1', 'localhost'].includes(listenHost);
 
   // 详尽日志：把 createApp 的 log 接到分级日志系统（落盘 + 内存缓冲 + SSE）。
   // 关键：logger 的 mirrorConsole 已经会走 console，所以这里**只写 logger、不再调原 log**，
@@ -582,9 +585,9 @@ export function createApp({ log = console.log } = {}) {
   }
 
   // ── 来源校验（CSRF / DNS rebinding 防护）────────────────────────────────
-  // 服务只监听回环，但**浏览器里的任意网页都能向 127.0.0.1 发简单请求**，
+  // **浏览器里的任意网页都能向控制台发简单请求**，
   // 而 CORS 只挡"读响应"、挡不住"副作用"（改配置、暂停、重置数据…）。
-  // 所以所有 /api/* 都必须来自回环 Host；带 Origin/Referer 时必须同源。
+  // 本机模式只接受回环 Host；开启远程监听后允许远程 Host，Origin/Referer 仍须同源。
   function isLoopbackHostHeader(host) {
     return /^127\.0\.0\.1(:\d+)?$/.test(host)
       || /^localhost(:\d+)?$/.test(host)
@@ -593,12 +596,13 @@ export function createApp({ log = console.log } = {}) {
 
   function originAllowed(req) {
     const host = String(req.headers.host ?? '');
-    if (!isLoopbackHostHeader(host)) return false;
+    if (!isLoopbackHostHeader(host) && !remoteAccess) return false;
+    if (req.headers['sec-fetch-site'] === 'cross-site') return false;
     const origin = String(req.headers.origin ?? '');
     if (origin) {
       try {
         const u = new URL(origin);
-        return isLoopbackHostHeader(u.host) && u.host === host;
+        return ['http:', 'https:'].includes(u.protocol) && u.host === host;
       } catch { return false; }
     }
     const referer = String(req.headers.referer ?? '');
@@ -758,7 +762,7 @@ export function createApp({ log = console.log } = {}) {
       // 来源校验：挡住"恶意网页借浏览器打 127.0.0.1"（CSRF / DNS rebinding）。
       // 必须在 authorize 之后、路由分发之前。
       if (!originAllowed(req)) {
-        return json(res, 403, { error: '请求来源不被信任（仅接受本机控制台的同源请求）' });
+        return json(res, 403, { error: '请求来源不被信任（仅接受控制台的同源请求）' });
       }
       const method = req.method;
 
@@ -880,7 +884,7 @@ export function createApp({ log = console.log } = {}) {
   async function listenOn(port) {
     return new Promise((resolve, reject) => {
       server.once('error', reject);
-      server.listen(port, '127.0.0.1', () => {
+      server.listen(port, listenHost, () => {
         server.off('error', reject);
         resolve(port); // 必须把实际端口传回去，Electron 壳要用它加载页面
       });
@@ -950,7 +954,9 @@ export function createApp({ log = console.log } = {}) {
 
     if (getConfig().proactive?.enabled) orchestrator.startProactiveLoop();
     orchestrator.startReminderLoop();   // 提醒（闹钟）调度：到点往群里发提醒
-    log(`控制台已就绪：http://127.0.0.1:${port}`);
+    const displayHost = listenHost.includes(':') ? `[${listenHost}]` : listenHost;
+    log(`控制台已就绪：http://${displayHost}:${port}`);
+    if (remoteAccess) log('[console] 远程监听已开启，请使用服务器 IP 或域名访问。');
     log(`OneBot: ws=${getConfig().onebot?.wsUrl} http=${getConfig().onebot?.httpUrl}`);
     log(`模型: ${getConfig().api.model || '（未设置，请在设置里选择）'} @ ${getConfig().api.baseUrl}`);
     return port;
